@@ -30,6 +30,38 @@ param (
     [switch]$full
 )
 
+# Function to convert a TimeSpan object to a formatted string
+function Convert-TimeSpanToString {
+    param (
+        [Parameter(Mandatory = $true)]
+        [System.TimeSpan]$TimeSpan,
+        
+        [Parameter(Mandatory = $false)]
+        [string]$Format = "HH:mm"
+    )
+
+    # Extract the components of the TimeSpan
+    $hours = [math]::Floor($TimeSpan.TotalHours)
+    $minutes = $TimeSpan.Minutes
+    $seconds = $TimeSpan.Seconds    
+
+    # Format the output based on the provided format
+    switch ($Format) {
+        "HH:mm:ss" {
+            return "{0:00}:{1:00}:{2:00}" -f $hours, $minutes, $seconds
+        }
+        "HH:mm" {
+            return "{0:00}:{1:00}" -f $hours, $minutes
+        }
+        "text" {
+            return "{0}h{1}" -f $hours, $minutes
+        }
+        default {
+            throw "Unsupported format. Please use 'HH:mm:ss', 'HH:mm' or 'text'."
+        }
+    }
+}
+
 Write-Host ""
 
 # Get the current date without the time component
@@ -119,22 +151,35 @@ try {
             Write-Host -NoNewline -ForegroundColor "Green" "$firstEventTime"
             Write-Host -NoNewline -ForegroundColor "Green" " "
             Write-Host "Start"
-        }
 
-        # Display lunch break
-        if ($maxLunchStart -and $maxLunchEnd) {
-            $lunchStartTime = $maxLunchStart.TimeCreated.ToString("HH:mm")
-            $lunchEndTime = $maxLunchEnd.TimeCreated.ToString("HH:mm")
-            Write-Host -NoNewline -ForegroundColor "Red" "$lunchStartTime"
-            Write-Host -NoNewline -ForegroundColor "Red" " "
-            Write-Host "Lunch"
-            Write-Host -NoNewline -ForegroundColor "Green" "$lunchEndTime"
-            Write-Host -NoNewline -ForegroundColor "Green" " "
-            Write-Host "End Lunch"
+            $now = Get-Date
+            $totalWorkTime = $now - $firstEvent.TimeCreated
+            
+            # Display lunch break
+            if ($maxLunchStart -and $maxLunchEnd -and $maxLunchDuration) {
+                $totalWorkTime = $totalWorkTime - $maxLunchDuration
+                $lunchStartTime = $maxLunchStart.TimeCreated.ToString("HH:mm")
+                $lunchEndTime = $maxLunchEnd.TimeCreated.ToString("HH:mm")
+                Write-Host -NoNewline -ForegroundColor "Red" "$lunchStartTime"
+                Write-Host -NoNewline -ForegroundColor "Red" " "
+                Write-Host "Lunch"
+                Write-Host -NoNewline -ForegroundColor "Green" "$lunchEndTime"
+                Write-Host -NoNewline -ForegroundColor "Green" " "
+                Write-Host "End Lunch"
+            }
+            else {
+                Write-Host "No lunch break found"
+            }
+
+            # Display total work time
+            $formattedTime = Convert-TimeSpanToString -TimeSpan $totalWorkTime -Format "text"
+            Write-Host -NoNewline "`nWork time until now: "
+            Write-Host -ForegroundColor "Blue" "$formattedTime"
         }
         else {
-            Write-Host "No lunch break found"
+            Write-Host "No events found for today"
         }
+
     }
 }
 catch {
