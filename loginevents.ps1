@@ -11,6 +11,10 @@
     When this flag is set, all events of the day are displayed. Without this flag, only the first event and the 
     longest lunch break are displayed.
 
+.PARAMETER deltaDays
+    Specifies the number of days to go back or forward from the current day. The default is 0, which represents 
+    the current day.
+
 .EXAMPLE
     .\loginevents.ps1
 
@@ -21,13 +25,19 @@
 
     Displays all login and logout events of the current day.
 
+.EXAMPLE
+    .\loginevents.ps1 -deltaDays -1
+
+    Displays the worktime and lunch break of the previous day.
+
 .NOTES
     Author: tomtucker18
-    Date: 2024-07-17
+    Date: 2024-10-24
 #>
 
 param (
-    [switch]$full
+    [switch]$full,
+    [string]$deltaDays = 0
 )
 
 # Function to convert a TimeSpan object to a formatted string
@@ -64,18 +74,26 @@ function Convert-TimeSpanToString {
 
 Write-Host ""
 
-# Get the current date without the time component
-$today = (Get-Date).Date
-
 try {
+    # Get the current date without the time component
+    $today = (Get-Date).Date.AddDays($deltaDays)
+
+    # Display the relevant date based on parameters
+    if ($deltaDays -eq 0 -and $full) {
+        Write-Host "Today's login events`n"
+    }
+    elseif ($deltaDays -ne 0) {
+        Write-Host "Login events for $($today.Date.ToShortDateString())`n"
+    }
+
     # Retrieve events from the OneApp_IGCC log
     $events = Get-WinEvent -LogName "OneApp_IGCC" | Where-Object {
-        $_.TimeCreated -ge $today -and $_.ProviderName -eq "OneApp_IGCC_WinService"
+        $_.TimeCreated -ge $today -and $_.TimeCreated -lt $today.AddDays(1) -and $_.ProviderName -eq "OneApp_IGCC_WinService"
     }
 
     # Filter events for specific messages
     $filteredEvents = $events | Where-Object {
-        $_.Message -match "SessionLogon|SessionLock|SessionUnlock"
+        $_.Message -match "SessionLogon|SessionLock|SessionUnlock|SessionLogoff"
     }
 
     # Sort the filtered events by date ascending
@@ -91,10 +109,12 @@ try {
     Write-Host "----- ------"
 
     foreach ($event in $sortedEvents) {
+        # Determine the action based on the event message
         $action = switch -Regex ($event.Message) {
             "SessionLogon" { "Login" }
             "SessionLock" { "Lock" }
             "SessionUnlock" { "Unlock" }
+            "SessionLogoff" { "Logout" }
             default { $event.Message }
         }
 
@@ -131,6 +151,7 @@ try {
             # Select color based on action
             switch ($action) {
                 "Lock" { $color = "Red" }
+                "Logout" { $color = "Red" }
                 "Login" { $color = "Green" }
                 "Unlock" { $color = "Green" }
                 default { $color = "White" }
@@ -152,28 +173,42 @@ try {
             Write-Host -NoNewline -ForegroundColor "Green" " "
             Write-Host "Start"
 
+            # Calculate total work time until now
             $now = Get-Date
             $totalWorkTime = $now - $firstEvent.TimeCreated
             
             # Display lunch break
             if ($maxLunchStart -and $maxLunchEnd -and $maxLunchDuration) {
+                # Subtract lunch break from total work time
                 $totalWorkTime = $totalWorkTime - $maxLunchDuration
                 $lunchStartTime = $maxLunchStart.TimeCreated.ToString("HH:mm")
                 $lunchEndTime = $maxLunchEnd.TimeCreated.ToString("HH:mm")
-                Write-Host -NoNewline -ForegroundColor "Red" "$lunchStartTime"
-                Write-Host -NoNewline -ForegroundColor "Red" " "
+                
+                # Display lunch break
+                Write-Host -NoNewline -ForegroundColor "Red" "$lunchStartTime "
                 Write-Host "Lunch"
-                Write-Host -NoNewline -ForegroundColor "Green" "$lunchEndTime"
-                Write-Host -NoNewline -ForegroundColor "Green" " "
+                Write-Host -NoNewline -ForegroundColor "Green" "$lunchEndTime "
                 Write-Host "End Lunch"
             }
             else {
                 Write-Host "No lunch break found"
             }
-
+            
             # Display total work time
+            $sumMessage = "`nWork time until now: "
+            if ($deltaDays -ne 0) {
+                # Calculate work time for the whole day
+                $lastEvent = $sortedEvents[-1]
+                $lastEventTime = $lastEvent.TimeCreated.ToString("HH:mm")
+                $totalWorkTime = $lastEvent.TimeCreated - $firstEvent.TimeCreated
+
+                $sumMessage = "`nWork time for the day: "
+
+                Write-Host -NoNewline -ForegroundColor "Red" "$lastEventTime "
+                Write-Host "End Work"
+            }
             $formattedTime = Convert-TimeSpanToString -TimeSpan $totalWorkTime -Format "text"
-            Write-Host -NoNewline "`nWork time until now: "
+            Write-Host -NoNewline $sumMessage
             Write-Host -ForegroundColor "Blue" "$formattedTime"
         }
         else {
