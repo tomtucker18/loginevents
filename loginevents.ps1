@@ -11,6 +11,10 @@
     When this flag is set, all events of the day are displayed. Without this flag, only the first event and the 
     longest lunch break are displayed.
 
+.PARAMETER showIndex
+    When this flag is set in combination with the -full parameter, the events are displayed with an index number 
+    at the beginning of each line.
+
 .PARAMETER deltaDays
     Specifies the number of days to go back or forward from the current day. The default is 0, which represents 
     the current day.
@@ -37,6 +41,7 @@
 
 param (
     [switch]$full,
+    [switch]$showIndex,
     [string]$deltaDays = 0
 )
 
@@ -74,6 +79,11 @@ function Convert-TimeSpanToString {
 
 Write-Host ""
 
+if ($showIndex -and -not $full) {
+    Write-Warning "The -showIndex parameter only takes effect in combination with the -full parameter."
+    Write-Host ""
+}
+
 try {
     # Get the current date without the time component
     $today = (Get-Date).Date.AddDays($deltaDays)
@@ -99,40 +109,53 @@ try {
     # Sort the filtered events by date ascending
     $sortedEvents = $filteredEvents | Sort-Object -Property TimeCreated
 
+    # Determine the width of the index column
+    $indexWidth = [Math]::Max(5, $sortedEvents.Count.ToString().Length)
+
     # Initialize variables
     $firstEvent = $null
     $lunchStart = $null
     $lunchEnd = $null
     $maxLunchDuration = [TimeSpan]::MinValue
 
+    # Display index column in the header
+    if ($showIndex -and $full) {
+        Write-Host -NoNewline "Index".PadRight($indexWidth + 1)
+    }
     Write-Host "Time  Action"
+    # Display index column separator
+    if ($showIndex -and $full) {
+        Write-Host -NoNewline ("-" * ($indexWidth ))
+        Write-Host -NoNewline " "
+    }
     Write-Host "----- ------"
 
-    foreach ($event in $sortedEvents) {
+    for ($i = 0; $i -lt $sortedEvents.Count; $i++) {
+        $currentEvent = $sortedEvents[$i]
         # Determine the action based on the event message
-        $action = switch -Regex ($event.Message) {
+        $action = switch -Regex ($currentEvent.Message) {
             "SessionLogon" { "Login" }
             "SessionLock" { "Lock" }
             "SessionUnlock" { "Unlock" }
             "SessionLogoff" { "Logout" }
-            default { $event.Message }
+            default { $currentEvent.Message }
         }
 
-        $time = $event.TimeCreated
+        $time = $currentEvent.TimeCreated
 
         # Capture the first event
         if (-not $firstEvent) {
-            $firstEvent = $event
+            $firstEvent = $currentEvent
             $firstEventTime = $time.ToString("HH:mm")
         }
 
         # Analyze lunch break
         if ($time.Hour -ge 11 -and $time.Hour -lt 14) {
             if ($action -eq "Lock") {
-                $lunchStart = $event
+                $lunchStart = $currentEvent
             }
             elseif ($action -eq "Unlock" -and $lunchStart) {
-                $lunchEnd = $event
+                $lunchEnd = $currentEvent
                 $lunchDuration = $lunchEnd.TimeCreated - $lunchStart.TimeCreated
 
                 if ($lunchDuration -gt $maxLunchDuration) {
@@ -159,6 +182,10 @@ try {
 
             # Output the line with the appropriate color for the time
             $eventTime = $time.ToString("HH:mm")
+            if ($showIndex) {
+                $paddedValue = $i.ToString().PadLeft($indexWidth - 1)
+                Write-Host -NoNewline -ForegroundColor "White" "$paddedValue) "
+            }
             Write-Host -NoNewline -ForegroundColor $color "$eventTime"
             Write-Host -NoNewline -ForegroundColor $color " "
             Write-Host "$action"
