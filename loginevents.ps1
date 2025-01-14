@@ -85,6 +85,9 @@ if ($showIndex -and -not $full) {
 }
 
 try {
+    # Start Windows Terminal loading animation
+    Write-Host -NoNewline ([char]27 + "]9;4;3;0" + [char]7)
+
     # Get the current date without the time component
     $today = (Get-Date).Date.AddDays($deltaDays)
 
@@ -191,6 +194,9 @@ try {
             Write-Host "$action"
         }
     }
+
+    # Stop Windows Terminal loading animation
+    Write-Host -NoNewline ([char]27 + "]9;4;0;0" + [char]7)
 
     # Display results if the "full" flag is not set
     if (-not $full) {
