@@ -290,6 +290,12 @@ try {
             $now = Get-Date
             $totalWorkTime = $now - $firstEvent.TimeCreated
             
+            # Calculate work time for the whole day
+            $lastEvent = $sortedEvents[-1]
+            if ($deltaDays -ne 0) {
+                $totalWorkTime = $lastEvent.TimeCreated - $firstEvent.TimeCreated
+            }
+            
             # Display lunch break
             if ($maxLunchStart -and $maxLunchEnd -and $maxLunchDuration) {
                 # Subtract lunch break from total work time
@@ -310,13 +316,8 @@ try {
             # Display total work time
             $sumMessage = "`nWork time until now: "
             if ($deltaDays -ne 0) {
-                # Calculate work time for the whole day
-                $lastEvent = $sortedEvents[-1]
-                $lastEventTime = $lastEvent.TimeCreated.ToString("HH:mm")
-                $totalWorkTime = $lastEvent.TimeCreated - $firstEvent.TimeCreated
-
                 $sumMessage = "`nWork time for the day: "
-
+                $lastEventTime = $lastEvent.TimeCreated.ToString("HH:mm")
                 Write-Host -NoNewline -ForegroundColor "Red" "$lastEventTime "
                 Write-Host "End Work"
             }
@@ -325,7 +326,11 @@ try {
             Write-Host -ForegroundColor "Blue" "$formattedTime"
         }
         else {
-            Write-Host "No events found for today"
+            $noEventsFoundMessage = "No events found for today";
+            if ($deltaDays -ne 0) {
+                $noEventsFoundMessage = "No events found for this day";
+            }
+            Write-Host $noEventsFoundMessage
         }
 
     }
