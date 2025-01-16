@@ -19,6 +19,18 @@
     Specifies the number of days to go back or forward from the current day. The default is 0, which represents 
     the current day.
 
+.PARAMETER from
+    Provide an index to use as the first event of the day. This can be useful when the first event of the day is
+    not a relevant login event.
+
+    To determine the correct index, use the -showIndex and -full flag to display event indices.
+
+.PARAMETER to
+    Provide an index to use as the last event of the day. This can be useful when the last event of the day is
+    not a relevant login event.
+
+    To determine the correct index, use the -showIndex and -full flag to display event indices.
+
 .EXAMPLE
     .\loginevents.ps1
 
@@ -34,6 +46,12 @@
 
     Displays the worktime and lunch break of the previous day.
 
+.EXAMPLE
+    .\loginevents.ps1 -full -showIndex -from 5 -to 10
+
+    Displays the events of the current day with an index number at the beginning of each line. Only events with
+    indices between 5 and 10 are shown.
+
 .NOTES
     Author: tomtucker18
     Date: 2024-10-24
@@ -42,7 +60,9 @@
 param (
     [switch]$full,
     [switch]$showIndex,
-    [string]$deltaDays = 0
+    [string]$deltaDays = 0,
+    [Nullable[int]]$from,
+    [Nullable[int]]$to
 )
 
 # Function to convert a TimeSpan object to a formatted string
@@ -77,6 +97,51 @@ function Convert-TimeSpanToString {
     }
 }
 
+# Start Windows Terminal loading animation
+function StartLoadingAnimation {
+    Write-Host -NoNewline ([char]27 + "]9;4;3;0" + [char]7)
+}
+
+# Stop Windows Terminal loading animation
+function StopLoadingAnimation {
+    # Stop Windows Terminal loading animation
+    Write-Host -NoNewline ([char]27 + "]9;4;0;0" + [char]7)
+}
+
+# Helper function to validate index range
+function ValidateIndexRange {
+    param (
+        [Nullable[int]]$from,
+        [Nullable[int]]$to,
+        [int]$maxCount
+    )
+
+    if ($from -ne $null -and $from -lt 0) {
+        StopLoadingAnimation
+        throw "Invalid index range. The 'from' index must be greater than or equal to 0."
+    }
+
+    if ($from -ne $null -and $from -ge $maxCount) {
+        StopLoadingAnimation
+        throw "Invalid index range. The 'from' index must be less than the total number of events."
+    }
+
+    if ($to -ne $null -and $to -ge $maxCount) {
+        StopLoadingAnimation
+        throw "Invalid index range. The 'to' index must be less than the total number of events."
+    }
+
+    if ($to -ne $null -and $to -lt 1) {
+        StopLoadingAnimation
+        throw "Invalid index range. The 'to' index must be greater than or equal to 1."
+    }
+
+    if ($from -ne $null -and $to -ne $null -and $from -gt $to) {
+        StopLoadingAnimation
+        throw "Invalid index range. The 'from' index must be less than or equal to the 'to' index."
+    }
+}
+
 Write-Host ""
 
 if ($showIndex -and -not $full) {
@@ -85,8 +150,7 @@ if ($showIndex -and -not $full) {
 }
 
 try {
-    # Start Windows Terminal loading animation
-    Write-Host -NoNewline ([char]27 + "]9;4;3;0" + [char]7)
+    StartLoadingAnimation
 
     # Get the current date without the time component
     $today = (Get-Date).Date.AddDays($deltaDays)
@@ -111,6 +175,19 @@ try {
 
     # Sort the filtered events by date ascending
     $sortedEvents = $filteredEvents | Sort-Object -Property TimeCreated
+
+    ValidateIndexRange -from $from -to $to -maxCount $sortedEvents.Count
+
+    # Filter events based on the provided index range
+    if ($from -and $to) {
+        $sortedEvents = $sortedEvents[$from..$to]
+    }
+    elseif ($from) {
+        $sortedEvents = $sortedEvents[$from..($sortedEvents.Count - 1)]
+    }
+    elseif ($to) {
+        $sortedEvents = $sortedEvents[0..$to]
+    }
 
     # Determine the width of the index column
     $indexWidth = [Math]::Max(5, $sortedEvents.Count.ToString().Length)
@@ -186,7 +263,11 @@ try {
             # Output the line with the appropriate color for the time
             $eventTime = $time.ToString("HH:mm")
             if ($showIndex) {
-                $paddedValue = $i.ToString().PadLeft($indexWidth - 1)
+                $currentIndex = $i
+                if ($from) {
+                    $currentIndex += $from
+                }
+                $paddedValue = $currentIndex.ToString().PadLeft($indexWidth - 1)
                 Write-Host -NoNewline -ForegroundColor "White" "$paddedValue) "
             }
             Write-Host -NoNewline -ForegroundColor $color "$eventTime"
@@ -195,8 +276,7 @@ try {
         }
     }
 
-    # Stop Windows Terminal loading animation
-    Write-Host -NoNewline ([char]27 + "]9;4;0;0" + [char]7)
+    StopLoadingAnimation
 
     # Display results if the "full" flag is not set
     if (-not $full) {
