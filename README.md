@@ -1,8 +1,8 @@
 # LoginEvents PowerShell Script
 
-## Overview
+The LoginEvents PowerShell script analyzes work time activities by extracting data from the `OneApp_IGCC` event log. It provides a daily overview, including the first login, the last logout, and the longest lunch break based on "Lock" and "Unlock" events.
 
-The **LoginEvents PowerShell Script** helps analyze work time activities by reading events from the `OneApp_IGCC` event log. It provides an overview of daily activity, including the first login, the last logout, and the longest lunch break between "Lock" and "Unlock" events.
+<img src="https://github.com/user-attachments/assets/6debf8ed-531a-4b16-be17-dfa4f683f108" alt="screenshot cli example" height="250px" />
 
 ## Features
 
