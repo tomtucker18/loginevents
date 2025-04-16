@@ -15,6 +15,10 @@
     When this flag is set in combination with the -full parameter, the events are displayed with an index number 
     at the beginning of each line.
 
+.PARAMETER keepOpen
+    When this flag is set you will be prompted to press Enter before the script exits. This is useful when running the script
+    from a shortcut or link, as it allows you to see the output before the window closes.
+
 .PARAMETER deltaDays
     Specifies the number of days to go back or forward from the current day. The default is 0, which represents 
     the current day.
@@ -61,6 +65,7 @@ param (
     [switch]$full,
     [switch]$showIndex,
     [string]$deltaDays = 0,
+    [switch]$keepOpen,
     [Nullable[int]]$from,
     [Nullable[int]]$to
 )
@@ -339,7 +344,8 @@ catch {
     Write-Error "Error retrieving events: $_"
 }
 
-Write-Host ""
-
 # Prompt to keep window open
-Read-Host -Prompt "Press Enter to exit"
+if($keepOpen) {
+    Write-Host ""
+    Read-Host -Prompt "Press Enter to exit"
+}
